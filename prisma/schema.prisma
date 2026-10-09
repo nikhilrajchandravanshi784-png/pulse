@@ -1,0 +1,1565 @@
+// Prisma Schema for Pulse Health / Project Pulse
+// Compatible with SQLite (development/demo) and PostgreSQL (production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  passwordHash    String
+  name            String
+  role            String           @default("PATIENT") // PATIENT, CLINICIAN, CAREGIVER, ADMIN
+  preferredLang   String           @default("hi")     // "hi" for Hindi-first, "en" for English
+  phoneNumber     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Patient Core Relationships
+  profile               HealthProfile?
+  patientProfile        PatientProfile?
+  clinicianProfile      ClinicianProfile?
+  medicalHistory        MedicalHistory?
+  goals                 HealthGoal[]
+  lifestyle             LifestyleProfile?
+  devices               Device[]
+  dataSources           DataSource[]
+  metrics               HealthMetric[]
+  dailySummaries        DailySummary[]
+  insights              Insight[]
+  carePrograms          CareProgram[]
+  messages              CareTeamMessage[]
+  consents              ConsentRecord[]
+  dailyCheckIns         DailyCheckIn[]
+  glucoseEntries        GlucoseEntry[]
+
+  // Project Pulse Recovery & Care Plan Relations
+  patientCarePlans      CarePlan[]               @relation("PatientCarePlans")
+  clinicianCarePlans    CarePlan[]               @relation("ClinicianCarePlans")
+  carePlanVersions      CarePlanVersion[]
+  recoveryEvents        RecoveryEvent[]          @relation("PatientRecoveryEvents")
+  coachConversations    CoachConversation[]
+  careCircleInvitations CareCircleInvitation[]   @relation("PatientCareCircle")
+  sharingConsents       SharingConsent[]
+  weeklyReviews         WeeklyReview[]
+  clinicalMeasurements  ClinicalMeasurement[]
+  patientEscalations    SafetyEscalation[]       @relation("PatientEscalations")
+  clinicianEscalations  SafetyEscalation[]       @relation("ClinicianEscalations")
+  assignedTasks         FollowUpTask[]           @relation("ClinicianTasks")
+  patientTasks          FollowUpTask[]           @relation("PatientTasks")
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+
+  // Pulse Food AI Relations
+  foodImageAnalyses     FoodImageAnalysis[]
+  foodLogs              FoodLog[]
+  dailyNutritionSummaries DailyNutritionSummary[]
+
+  // Pulse Meal Coach Relations
+  mealSuggestions       MealSuggestion[]
+  mealSuggestionFeedbacks MealSuggestionFeedback[]
+  foodPreference        PatientFoodPreference?
+
+  // Pulse Community Relations
+  communityProfile        CommunityProfile?
+  communityMemberships    GroupMembership[]
+  communityPosts          CommunityPost[]
+  communityComments       CommunityComment[]
+  communityReactions      PostReaction[]
+  communityReportsMade    CommunityReport[]        @relation("ReportsMade")
+  communityModerations    ModerationAction[]       @relation("ModeratorActions")
+  communityNotifications  CommunityNotification[]
+  communityPreference     CommunityPreference?
+  communityAuditLogs      CommunityAuditLog[]
+
+  // Pulse Proactive Care Relations
+  routineOccurrences      RoutineOccurrence[]
+  interventionEvents      InterventionEvent[]
+  proactivePreference     ProactiveNotificationPreference?
+  interventionAuditLogs   InterventionAuditLog[]
+
+  // Pulse Support Relations
+  patientAppointments     DoctorAppointment[]      @relation("PatientAppointments")
+
+  // Pulse Subscription Relations
+  subscriptions         UserSubscription[]       @relation("UserSubscriptions")
+  paymentTransactions   PaymentTransaction[]     @relation("UserTransactions")
+}
+
+model PatientProfile {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  diabetesType          String    @default("Type 2 Diabetes") // Type 2 Diabetes, Pre-diabetes, Gestational, Other
+  diagnosisYear         Int?
+  primaryClinicianName  String?   @default("Dr. Raman Verma, MD")
+  clinicName            String?   @default("City Diabetes & Endocrine Center")
+  preferredReminderTime String?   @default("08:00") // Preferred daily time
+  workSchedule          String?   @default("Day Shift (09:00 - 18:00)")
+  accessibilityNeeds    String?   @default("Large text, audio assistance")
+  programStartDay       DateTime  @default(now())
+  programDayCurrent     Int       @default(1)       // Day 1 to 90
+  programStatus         String    @default("ACTIVE") // ACTIVE, COMPLETED, PAUSED
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model ClinicianProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  licenseNumber   String?   @default("MCI-84729-DEL")
+  specialty       String?   @default("Endocrinology & Diabetology")
+  hospitalClinic  String?   @default("Pulse Diabetes & Metabolic Care Center")
+  contactPhone    String?   @default("+91 98110 23456")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model HealthProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  dateOfBirth     DateTime?
+  biologicalSex   String?   // male, female, other, prefer_not_to_say
+  heightCm        Float?
+  weightKg        Float?
+  country         String?   @default("India")
+  avatarUrl       String?
+  onboardingStep  Int       @default(1)
+  isOnboarded     Boolean   @default(false)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model MedicalHistory {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  existingConditions    String    @default("[]") // JSON string
+  previousDiagnoses     String    @default("[]")
+  allergies             String    @default("[]")
+  currentMedications    String    @default("[]") // JSON string: ["Metformin 500mg BID", "Glimepiride 1mg OD"]
+  previousSurgeries     String    @default("[]")
+  familyMedicalHistory  String    @default("[]")
+  additionalNotes       String?
+  preferNotToSay        Boolean   @default(false)
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// Versioned Clinician-Approved Care Plan
+model CarePlan {
+  id                    String            @id @default(cuid())
+  patientId             String
+  patient               User              @relation("PatientCarePlans", fields: [patientId], references: [id], onDelete: Cascade)
+  clinicianId           String?
+  clinician             User?             @relation("ClinicianCarePlans", fields: [clinicianId], references: [id], onDelete: SetNull)
+
+  title                 String            @default("Personalized Diabetes Self-Management Plan")
+  instructions          String            // Full clinician instructions
+  monitoringSchedule    String?           // e.g. "Fasting 3x/week, 2h post-dinner 2x/week"
+  dietGuidance          String?           // e.g. "Low glycemic, plate method, controlled roti portion"
+  activityGuidance      String?           // e.g. "15-min post-meal brisk walk, 5 days/week"
+  followUpDate          DateTime?
+  currentVersion        Int               @default(1)
+  status                String            @default("ACTIVE") // ACTIVE, SUPERSEDED, DRAFT
+
+  versions              CarePlanVersion[]
+  goals                 HealthGoal[]
+
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+}
+
+model CarePlanVersion {
+  id              String    @id @default(cuid())
+  carePlanId      String
+  carePlan        CarePlan  @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  createdById     String
+  createdBy       User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  versionNumber   Int
+  changesSummary  String
+  snapshotJson    String    // Full JSON snapshot of plan instructions and goals
+
+  createdAt       DateTime  @default(now())
+}
+
+// SMART Health Goals with Recovery Lifecycle
+model HealthGoal {
+  id                  String             @id @default(cuid())
+  userId              String
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  carePlanId          String?
+  carePlan            CarePlan?          @relation(fields: [carePlanId], references: [id], onDelete: SetNull)
+
+  title               String             // e.g. "10-minute walk after lunch"
+  titleHindi          String?            // Hindi translation e.g. "दोपहर के खाने के बाद 10 मिनट टहलें"
+  description         String?
+  reason              String?            // Reason: "Support agreed physical-activity routine"
+  category            String             @default("activity") // activity, nutrition, monitoring, lifestyle, sleep
+  frequency           String             @default("5 days/week")
+  preferredTime       String?            @default("After lunch")
+  targetDurationMin   Int?               @default(10)
+  targetValue         Float?
+  targetUnit          String?
+
+  startDate           DateTime           @default(now())
+  reviewDate          DateTime?
+  sourceRecommendation String           @default("Clinician Care Plan") // Clinician Care Plan, Patient Adapted, Self-Selected
+  
+  patientStatus       String             @default("ACCEPTED") // ACCEPTED, ADJUSTMENT_REQUESTED, PAUSED, UNSUITABLE
+  clinicianStatus     String             @default("APPROVED") // APPROVED, PENDING_REVIEW, REJECTED
+  isNonMedical        Boolean            @default(true)      // Non-medical goals can be adapted by recovery engine
+
+  isPrimary           Boolean            @default(false)
+  status              String             @default("ACTIVE")   // ACTIVE, COMPLETED, PAUSED, ARCHIVED
+
+  recoveryEvents      RecoveryEvent[]
+  routineOccurrences  RoutineOccurrence[]
+  interventionEvents  InterventionEvent[]
+
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+// Pulse Daily Check-In (Target 30-60 Seconds)
+model DailyCheckIn {
+  id                  String           @id @default(cuid())
+  userId              String
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date                String           // YYYY-MM-DD
+  mood                String           // Great, Good, Okay, Not great, Prefer not to say
+  routineStatus       String           @default("Completed") // Completed, Partially completed, Not completed, Not applicable today
+  
+  // Reported Barrier when routineStatus != Completed
+  barrier             String?          // Busy schedule, Forgot, Low motivation, Felt unwell, Pain or mobility difficulty, Could not afford/access resources, Family or work responsibilities, Did not understand the plan, Goal felt too difficult, Other, Prefer not to say
+  barrierDetails      String?
+  supportRequested    Boolean          @default(false)
+  
+  notes               String?
+  note                String?
+  energyLevel         Int?
+  stressLevel         Int?
+  completionTimeSec   Int?             @default(35) // Track 30-60 second target efficiency
+
+  glucoseEntries      GlucoseEntry[]
+
+  createdAt           DateTime         @default(now())
+
+  @@unique([userId, date])
+}
+
+// Optional Manual Glucose Log with Context
+model GlucoseEntry {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkInId       String?
+  checkIn         DailyCheckIn? @relation(fields: [checkInId], references: [id], onDelete: SetNull)
+
+  value           Float         // e.g. 118
+  unit            String        @default("mg/dL") // mg/dL or mmol/L
+  measuredAt      DateTime      @default(now())
+  context         String        // Fasting, Before meal, 2h post-meal, Bedtime, Random
+  source          String        @default("manual_entry")
+  notes           String?
+
+  createdAt       DateTime      @default(now())
+
+  @@index([userId, measuredAt])
+}
+
+// Engagement Recovery Engine Event Records
+model RecoveryEvent {
+  id                    String       @id @default(cuid())
+  patientId             String
+  patient               User         @relation("PatientRecoveryEvents", fields: [patientId], references: [id], onDelete: Cascade)
+  goalId                String
+  goal                  HealthGoal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  missedDate            String       // YYYY-MM-DD
+  reportedBarrier       String       // e.g. "Busy schedule", "Goal felt too difficult"
+  suggestedResponse     String       // e.g. "Offer shorter 5-min walk micro-routine"
+  suggestedActionTitle  String?
+  
+  patientDecision       String       @default("ACCEPTED") // ACCEPTED, REJECTED, MODIFIED, PENDING
+  revisedGoalTitle      String?
+  recoveryTimestamp     DateTime     @default(now())
+  
+  // 7-Day Follow-Up Completion Outcome
+  subsequentActionDone  Boolean?     // True if patient completed next scheduled action
+  recoveryResolvedAt    DateTime?
+  status                String       @default("RESOLVED") // PENDING, RESOLVED, ESCALATED_TO_CLINICIAN
+
+  createdAt             DateTime     @default(now())
+
+  @@index([patientId, missedDate])
+}
+
+// Reviewed Hindi/English Educational Content Library
+model EducationalArticle {
+  id              String          @id @default(cuid())
+  slug            String          @unique
+  language        String          @default("hi") // "hi" or "en"
+  topic           String          // nutrition, physical_activity, glucose_basics, recovery_habits, stress_sleep
+  title           String
+  titleHindi      String?
+  content         String          // Markdown or plain text
+  contentHindi    String?
+  
+  authorOrg       String          @default("Pulse Clinical Review Board")
+  sourceUrl       String?         // Reference clinical guideline URL
+  evidenceInfo    String?         // "ICMR Guidelines for Type 2 Diabetes / ADA Standards of Care 2024"
+  
+  reviewDate      DateTime        @default(now())
+  nextReviewDate  DateTime?
+  reviewerName    String          @default("Dr. Raman Verma, MD (Endocrinologist)")
+  reviewerRole    String          @default("Senior Diabetes Consultant")
+  
+  isApproved      Boolean         @default(true)
+  status          String          @default("PUBLISHED") // PUBLISHED, DRAFT, RETIRED
+
+  reviews         ArticleReview[]
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model ArticleReview {
+  id              String             @id @default(cuid())
+  articleId       String
+  article         EducationalArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  reviewerName    String
+  reviewNotes     String
+  approved        Boolean            @default(true)
+  reviewedAt      DateTime           @default(now())
+}
+
+// Pulse Coach Bilingual Conversations
+model CoachConversation {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language        String         @default("hi")
+  topicContext    String?        // e.g. "walking_routine_barrier", "post_dinner_habits"
+  
+  messages        CoachMessage[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model CoachMessage {
+  id              String            @id @default(cuid())
+  conversationId  String
+  conversation    CoachConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderRole      String            // "USER", "COACH_AI", "SAFETY_ROUTER"
+  content         String
+  contentHindi    String?
+  citedArticleId  String?           // Grounded educational citation
+  citedSource     String?
+  safetyEscalated Boolean           @default(false)
+
+  createdAt       DateTime          @default(now())
+}
+
+// Pulse Care Circle (Consent-Based Family Support)
+model CareCircleInvitation {
+  id                  String           @id @default(cuid())
+  patientId           String
+  patient             User             @relation("PatientCareCircle", fields: [patientId], references: [id], onDelete: Cascade)
+
+  caregiverEmail      String
+  caregiverName       String
+  relationship        String           // Spouse, Child, Sibling, Friend, Guardian
+  invitationToken     String           @unique
+  expiresAt           DateTime
+  status              String           @default("PENDING") // PENDING, ACCEPTED, REVOKED, EXPIRED
+
+  // Granular Patient-Controlled Permissions
+  shareGoals          Boolean          @default(true)
+  shareCompletedActions Boolean        @default(true)
+  shareReminders      Boolean          @default(false)
+  shareEducation      Boolean          @default(true)
+  shareWeeklySummary  Boolean          @default(true)
+  shareGlucose        Boolean          @default(false) // Sensitive: Explicit opt-in only, default false
+
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  consents            SharingConsent[]
+}
+
+model SharingConsent {
+  id              String                @id @default(cuid())
+  userId          String
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitationId    String
+  invitation      CareCircleInvitation  @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  permissionScope String                // JSON string of permissions granted
+  consentDate     DateTime              @default(now())
+  isRevoked       Boolean               @default(false)
+  revokedAt       DateTime?
+
+  createdAt       DateTime              @default(now())
+}
+
+// Pulse Review: Weekly Progress Summaries & Reports
+model WeeklyReview {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  weekNumber            Int       // 1 to 13 (90-day program)
+  startDate             String    // YYYY-MM-DD
+  endDate               String    // YYYY-MM-DD
+  
+  plannedActionsCount   Int       @default(0)
+  completedActionsCount Int       @default(0)
+  partiallyCompletedCount Int     @default(0)
+  missedRoutinesCount   Int       @default(0)
+  recoverySuccessCount  Int       @default(0)
+  checkInRatePercent    Float     @default(0)
+  
+  reportedBarriersList  String    @default("[]") // JSON string
+  patientReflection     String?
+  clinicianQuestions    String?
+  clinicianNotes        String?
+  clinicianReviewedAt   DateTime?
+
+  createdAt             DateTime  @default(now())
+
+  @@unique([userId, weekNumber])
+}
+
+// Verified Clinical Laboratory Measurements (HbA1c Baseline vs Follow-Up)
+model ClinicalMeasurement {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  measurementType String    // "HBA1C", "FASTING_PLASMA_GLUCOSE", "LIPID_PANEL", "BLOOD_PRESSURE"
+  value           Float     // e.g. 7.4
+  unit            String    @default("%") // "%", "mg/dL", "mmHg"
+  measuredAt      DateTime
+  source          String    @default("LABORATORY") // "LABORATORY", "CLINICIAN_ENTRY"
+  laboratoryName  String?   @default("City Pathology Labs")
+  isBaseline      Boolean   @default(false)
+  isFollowUp      Boolean   @default(false)
+  clinicalNotes   String?
+
+  createdAt       DateTime  @default(now())
+
+  @@index([userId, measurementType, measuredAt])
+}
+
+// Safety Routing & Clinical Escalation Records
+model SafetyEscalation {
+  id                  String    @id @default(cuid())
+  patientId           String
+  patient             User      @relation("PatientEscalations", fields: [patientId], references: [id], onDelete: Cascade)
+  clinicianId         String?
+  clinician           User?     @relation("ClinicianEscalations", fields: [clinicianId], references: [id], onDelete: SetNull)
+
+  reason              String    // e.g. "Severe Hypoglycemia Symptoms Reported", "Medication Dosage Alteration Inquiry"
+  severity            String    // "EMERGENCY", "HIGH", "MODERATE", "LOW"
+  triggerSource       String    // "CHECKIN_BARRIER", "COACH_QUERY", "GLUCOSE_READING", "MANUAL"
+  symptomDetails      String?
+  
+  patientSafeNotice   String    // Clear text shown to patient advising emergency or clinic contact
+  acknowledgedStatus  Boolean   @default(false)
+  acknowledgedAt      DateTime?
+  resolutionStatus    String    @default("OPEN") // OPEN, IN_REVIEW, RESOLVED
+  resolutionNotes     String?
+  resolvedAt          DateTime?
+
+  createdAt           DateTime  @default(now())
+
+  interventionEvents  InterventionEvent[]
+
+  @@index([patientId, severity, resolutionStatus])
+}
+
+// Clinician Follow-up Task Queue
+model FollowUpTask {
+  id              String    @id @default(cuid())
+  patientId       String
+  patient         User      @relation("PatientTasks", fields: [patientId], references: [id], onDelete: Cascade)
+  clinicianId     String
+  clinician       User      @relation("ClinicianTasks", fields: [clinicianId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String?
+  priority        String    @default("MEDIUM") // URGENT, HIGH, MEDIUM, LOW
+  status          String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  dueDate         DateTime?
+  completedAt     DateTime?
+
+  createdAt       DateTime  @default(now())
+}
+
+// Notification Abstraction
+model Notification {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title           String
+  titleHindi      String?
+  message         String
+  messageHindi    String?
+  category        String    // "REMINDER", "RECOVERY", "CARE_CIRCLE", "SAFETY", "REVIEW"
+  channel         String    @default("IN_APP") // IN_APP, EMAIL, SMS
+  isRead          Boolean   @default(false)
+  actionUrl       String?
+
+  createdAt       DateTime  @default(now())
+}
+
+// Security & Compliance Audit Log
+model AuditLog {
+  id              String    @id @default(cuid())
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action          String    // e.g. "CARE_PLAN_UPDATE", "GOAL_APPROVAL", "CARE_CIRCLE_REVOCATION", "REPORT_EXPORT"
+  resourceType    String
+  resourceId      String?
+  details         String?   // Sanitized JSON
+  ipAddress       String?
+
+  createdAt       DateTime  @default(now())
+}
+
+// Lifestyle context for circadian baseline
+model LifestyleProfile {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dietaryPreference   String?   @default("Indian Vegetarian / Whole Foods")
+  typicalMeals        String?   @default("Roti, Dal, Sabzi with curd")
+  mealTiming          String?   @default("Lunch 13:00, Dinner 20:30")
+  exerciseFrequency   String?   @default("3-4 days/week")
+  sleepSchedule       String?   @default("23:00 - 06:30")
+  workActivityPattern String?   @default("Desk worker / Lightly active")
+  smokingStatus       String?   @default("never")
+  alcoholConsumption  String?   @default("none")
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+// Passive device and metric models preserved from existing architecture
+model Device {
+  id                String        @id @default(cuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String
+  deviceName        String
+  deviceModel       String?
+  deviceIdentifier  String?
+  status            String        @default("CONNECTED")
+  lastSyncAt        DateTime?
+  batteryLevel      Int?
+  firmwareVersion   String?
+  metadata          String?
+  metrics           HealthMetric[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model DataSource {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerKey     String
+  displayName     String
+  category        String
+  isConnected     Boolean   @default(false)
+  isMock          Boolean   @default(false)
+  scopesGranted   String    @default("[]")
+  lastSyncStatus  String    @default("IDLE")
+  lastSyncAt      DateTime?
+  errorMessage    String?
+  accessToken     String?
+  refreshToken    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model HealthMetric {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId    String?
+  device      Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  source      String
+  metricType  String
+  value       Float
+  unit        String
+  timestamp   DateTime
+  metadata    String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, metricType, timestamp])
+  @@index([userId, timestamp])
+}
+
+model DailySummary {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date                  String
+  avgGlucose            Float?
+  glucoseTimeInRange    Float?
+  totalSteps            Int?
+  avgHeartRate          Float?
+  restingHeartRate      Float?
+  sleepDurationMinutes  Int?
+  sleepQualityScore     Int?
+  weightKg              Float?
+  activeMinutes         Int?
+  burnedCalories        Float?
+  dataCompletenessScore Float?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([userId, date])
+}
+
+model Insight {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String
+  category        String
+  title           String
+  description     String
+  impactScore     Int       @default(1)
+  isRead          Boolean   @default(false)
+  isDismissed     Boolean   @default(false)
+  disclaimer      String    @default("This information is for wellness and informational purposes only. It is not a medical diagnosis or substitute for professional medical advice.")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model CareProgram {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String
+  currentWeek     Int       @default(1)
+  totalWeeks      Int       @default(12)
+  status          String    @default("ACTIVE")
+  assignedCoach   String    @default("Dr. Raman Verma, MD")
+  weeklyFocus     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model CareTeamMessage {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderName      String
+  senderRole      String
+  content         String
+  isCarePlanNote  Boolean   @default(false)
+  read            Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+}
+
+model ConsentRecord {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerKey     String
+  dataCategories  String
+  purpose         String
+  explicitConsent Boolean   @default(true)
+  consentedAt     DateTime  @default(now())
+  ipAddress       String?
+  userAgent       String?
+  isRevoked       Boolean   @default(false)
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+// ==============================================================================
+// PULSE FOOD AI MODULE
+// ==============================================================================
+
+// Tracks every AI image analysis attempt. Stores only a reference to the image,
+// not the raw bytes. The actual image file is stored in private object storage.
+model FoodImageAnalysis {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Storage reference — never a public URL. Signed URLs are generated on demand.
+  imageRef        String?   // opaque storage key, e.g. "food-images/userId/uuid.jpg"
+  imageMimeType   String?   // "image/jpeg", "image/png", "image/webp"
+  imageSizeBytes  Int?
+
+  provider        String    @default("demo") // "gemini", "openai", "demo"
+  modelVersion    String?
+  analysisStatus  String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, SKIPPED
+  isDemo          Boolean   @default(true)      // Always track whether real AI was used
+
+  // Context supplied by patient at upload time
+  mealType        String?   // breakfast, lunch, dinner, snack
+  mealDescription String?
+  cuisineType     String?
+  portionContext  String?
+
+  errorCode       String?
+  errorMessage    String?
+
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  recognizedItems RecognizedFoodItem[]
+  foodLog         FoodLog?
+}
+
+// Each food item returned by the AI for a given analysis
+model RecognizedFoodItem {
+  id                  String             @id @default(cuid())
+  analysisId          String
+  analysis            FoodImageAnalysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  candidateFoodName   String             // AI's raw prediction
+  candidateFoodNameHi String?            // Hindi name if known
+  alternativeName     String?            // e.g. "chapati" for "roti"
+  normalizedFoodId    String?            // FK to NutritionFood.id when matched
+
+  estimatedPortion    Float?             // numeric quantity
+  estimatedPortionUnit String?           // "katori", "roti", "cup", "grams", "tablespoon"
+  estimatedMassGrams  Float?
+  confidenceScore     Float?             // 0.0 – 1.0
+  uncertaintyNotes    String?
+  ambiguityNote       String?            // e.g. "Could not distinguish dal type"
+  suggestionOptions   String?            // JSON array of alternative names
+
+  // Original AI prediction preserved for audit
+  originalPrediction  String?            // JSON snapshot of raw AI output for this item
+
+  // Patient correction fields
+  patientCorrected    Boolean  @default(false)
+  correctedFoodName   String?
+  correctedPortion    Float?
+  correctedPortionUnit String?
+  correctedMassGrams  Float?
+  preparationMethod   String?            // e.g. "fried", "boiled", "dry-roasted"
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  foodLogItems FoodLogItem[]
+}
+
+// Canonical nutrition database records. Populated from USDA FoodData Central
+// or a configurable Indian food composition source. Never invented at runtime.
+model NutritionFood {
+  id                  String    @id @default(cuid())
+  provider            String    // "usda", "indian_fcdb", "demo", "custom"
+  externalFoodId      String?   // Provider's own ID e.g. USDA fdcId
+  canonicalName       String    // English canonical name
+  canonicalNameHi     String?   // Hindi name
+  alternativeNames    String    @default("[]")  // JSON array of aliases
+  servingDescription  String?   // e.g. "1 medium roti (30g)"
+  defaultServingMass  Float?    // grams
+
+  // Per-100g values stored for consistent math
+  caloriesPer100g     Float?
+  carbsPer100g        Float?
+  proteinPer100g      Float?
+  fatPer100g          Float?
+  fiberPer100g        Float?
+  sugarPer100g        Float?
+  sodiumPer100g       Float?
+
+  // Portion conversion table (JSON): [{"unit":"katori","grams":150},...]
+  portionConversions  String    @default("[]")
+
+  sourceReference     String?   // Citation or URL
+  dataVersion         String?
+  isVerified          Boolean   @default(false)
+  estimationNotes     String?   // Notes about accuracy limitations
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  foodLogItems    FoodLogItem[]
+
+  @@unique([provider, externalFoodId])
+  @@index([canonicalName])
+}
+
+// A patient's saved meal entry (one per meal-time per day)
+model FoodLog {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysisId  String?   @unique
+  analysis    FoodImageAnalysis? @relation(fields: [analysisId], references: [id], onDelete: SetNull)
+
+  mealType    String    // breakfast, lunch, dinner, snack
+  mealTime    DateTime
+  status      String    @default("DRAFT") // DRAFT, CONFIRMED, DELETED
+  notes       String?
+  hasPhoto    Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items           FoodLogItem[]
+  mealSuggestions MealSuggestion[]
+
+  @@index([userId, mealTime])
+}
+
+// Individual food items within a confirmed meal log
+model FoodLogItem {
+  id                  String          @id @default(cuid())
+  foodLogId           String
+  foodLog             FoodLog         @relation(fields: [foodLogId], references: [id], onDelete: Cascade)
+  recognizedItemId    String?
+  recognizedItem      RecognizedFoodItem? @relation(fields: [recognizedItemId], references: [id], onDelete: SetNull)
+  nutritionFoodId     String?
+  nutritionFood       NutritionFood?  @relation(fields: [nutritionFoodId], references: [id], onDelete: SetNull)
+
+  foodName            String          // Patient-confirmed display name
+  foodNameHi          String?
+  quantity            Float
+  quantityUnit        String          // "katori", "roti", "cup", "grams", "piece"
+  estimatedMassGrams  Float?
+
+  // Stored nutrient values at time of logging (denormalized for diary integrity)
+  calories            Float?          // kcal
+  carbohydrates       Float?          // grams
+  protein             Float?          // grams
+  fat                 Float?          // grams
+  fiber               Float?          // grams
+  sugar               Float?          // grams
+  sodium              Float?          // mg
+
+  nutritionSource     String?         // "usda", "indian_fcdb", "demo", "manual"
+  estimationNotes     String?         // e.g. "Based on standard 1 medium roti = 30g estimate"
+  patientConfirmed    Boolean  @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Aggregated daily nutrition totals. Rebuilt whenever a FoodLog is confirmed/deleted.
+model DailyNutritionSummary {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date                String    // YYYY-MM-DD in patient's local timezone
+
+  loggedCalories      Float     @default(0)
+  loggedCarbohydrates Float     @default(0)
+  loggedProtein       Float     @default(0)
+  loggedFat           Float     @default(0)
+  loggedFiber         Float     @default(0)
+  mealsLogged         Int       @default(0)
+
+  // PARTIAL means not all meals have been logged for the day
+  completenessStatus  String    @default("PARTIAL") // PARTIAL, FULL
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, date])
+}
+
+// ==============================================================================
+// PULSE MEAL COACH MODULE
+// ==============================================================================
+
+// Individual educational meal suggestions generated for a confirmed meal
+model MealSuggestion {
+  id                String       @id @default(cuid())
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  foodLogId         String?
+  foodLog           FoodLog?     @relation(fields: [foodLogId], references: [id], onDelete: SetNull)
+
+  suggestionType    String       // "ADDITION", "SUBSTITUTION", "PREPARATION"
+  title             String       // Brief headline (e.g. "Add a katori of cucumber salad")
+  titleHi           String?      // Hindi headline
+  suggestionText    String       // Actionable educational text
+  suggestionTextHi  String?      // Hindi actionable text
+  explanation       String       // Plain-language reason & evidence rationale
+  explanationHi     String?      // Hindi explanation
+  alternatives      String?      // JSON array of strings e.g. ["Sliced tomatoes with chaat masala", "Kachumber salad"]
+  
+  // Clinical / Evidence provenance
+  evidenceReference String?      // e.g. "ICMR-NIN Dietary Guidelines for Indians 2024"
+  guidanceId        String?
+  guidance          NutritionGuidance? @relation(fields: [guidanceId], references: [id], onDelete: SetNull)
+  uncertaintyNotes  String?      // Explicit transparency notes regarding portion/cooking uncertainty
+  
+  // Status: ACTIVE, ACCEPTED, SAVED_FOR_LATER, DISMISSED, UNSUITABLE
+  status            String       @default("ACTIVE")
+  isAiGenerated     Boolean      @default(false)
+  providerModel     String?      // e.g. "qwen/qwen3.8-27b", "rule_based_fallback"
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  feedbacks         MealSuggestionFeedback[]
+
+  @@index([userId, foodLogId])
+}
+
+// Patient feedback and interaction tracking for each meal suggestion
+model MealSuggestionFeedback {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  suggestionId  String
+  suggestion    MealSuggestion  @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  // Response: "TRY_IDEA", "ANOTHER_OPTION", "SAVE_FOR_LATER", "NOT_SUITABLE", "DISMISSED"
+  response      String
+  reason        String?         // Optional freeform reason (e.g. "Too expensive", "Not available today")
+
+  createdAt     DateTime        @default(now())
+
+  @@index([userId, suggestionId])
+}
+
+// Voluntary patient dietary preferences and cultural context
+model PatientFoodPreference {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Dietary pattern: vegetarian, eggetarian, non_vegetarian, vegan, jain
+  dietaryPattern      String?   @default("vegetarian")
+  regionalCuisine     String?   @default("North Indian") // North Indian, South Indian, Gujarati, Maharashtrian, Bengali, etc.
+
+  // Allergies & strict clinical exclusions (JSON string array e.g. ["peanuts", "mustard"])
+  allergies           String    @default("[]")
+  // Intolerances (JSON string array e.g. ["lactose", "gluten"])
+  intolerances        String    @default("[]")
+  // Voluntary dislikes/avoided foods (JSON string array e.g. ["karela", "mushrooms"])
+  foodsAvoided        String    @default("[]")
+
+  budgetPriority      String?   @default("standard") // "budget_conscious", "standard", "flexible"
+  cookingTimeMinutes  Int?      @default(30)
+  cookingFacilities   String?   @default("standard_kitchen") // "standard_kitchen", "basic_stove", "microwave_only"
+  servingsCount       Int?      @default(1)
+
+  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime  @default(now())
+}
+
+// Approved clinical nutrition education content library
+model NutritionGuidance {
+  id                    String    @id @default(cuid())
+  title                 String
+  titleHi               String?
+  content               String
+  contentHi             String?
+  language              String    @default("bilingual") // "hi", "en", "bilingual"
+  
+  // Topic: "VEGETABLES_FIBER", "PROTEIN_VARIETY", "PORTION_MINDFULNESS", "PREPARATION_METHODS", "COMPOSITE_DISHES"
+  topic                 String
+  sourceOrg             String    // "ICMR-NIN", "RSSDI", "ADA", "NIN"
+  sourceUrl             String?
+  publicationDate       String?   // e.g. "2024"
+  reviewerRole          String?   @default("Senior Diabetes Clinical Nutritionist")
+  reviewStatus          String    @default("APPROVED") // APPROVED, PENDING, DRAFT
+  lastReviewedAt        DateTime  @default(now())
+  applicableLimitations String?   // Explicit scope limitation
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  suggestions           MealSuggestion[]
+
+  @@index([topic, reviewStatus])
+}
+
+// ==============================================================================
+// PULSE COMMUNITY — PEER SUPPORT & MODERATED GROUPS ARCHITECTURE
+// ==============================================================================
+
+model CommunityProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName     String
+  avatarUrl       String?
+  bio             String?
+  preferredLang   String    @default("hi") // "hi" or "en"
+  interests       String    @default("[]") // JSON string array of topics e.g. ["HABITS", "NUTRITION"]
+  isModerator     Boolean   @default(false)
+  isRestricted    Boolean   @default(false)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model CommunityGroup {
+  id               String            @id @default(cuid())
+  slug             String            @unique
+  name             String
+  nameHi           String?
+  description      String
+  descriptionHi    String?
+  purpose          String
+  rules            String            @default("[]") // JSON string array of guidelines
+  language         String            @default("bilingual") // "hi", "en", "bilingual"
+  category         String            // "HABITS", "DAILY_LIVING", "NUTRITION", "ACTIVITY", "ROUTINES", "MOTIVATION", "JOURNEY_90", "HINDI"
+  memberLimit      Int               @default(15)
+  approvalRequired Boolean           @default(false)
+  status           String            @default("ACTIVE") // "ACTIVE", "ARCHIVED"
+  isDemo           Boolean           @default(false)
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  memberships      GroupMembership[]
+  posts            CommunityPost[]
+
+  @@index([category, status])
+}
+
+model GroupMembership {
+  id                 String          @id @default(cuid())
+  groupId            String
+  group              CommunityGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role               String          @default("MEMBER") // "MEMBER", "MODERATOR", "FACILITATOR"
+  status             String          @default("ACTIVE") // "ACTIVE", "PENDING_APPROVAL", "LEFT", "RESTRICTED"
+  notificationsMuted Boolean         @default(false)
+
+  joinedAt           DateTime        @default(now())
+  leftAt             DateTime?
+
+  @@unique([groupId, userId])
+  @@index([userId, status])
+  @@index([groupId, status])
+}
+
+model CommunityPost {
+  id               String            @id @default(cuid())
+  groupId          String
+  group            CommunityGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  authorId         String
+  author           User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  content          String
+  language         String            @default("hi")
+  category         String            @default("PERSONAL_EXPERIENCE") // "DAILY_WIN", "CHALLENGE", "ROUTINE_IDEA", "MOTIVATION", "QUESTION", "PERSONAL_EXPERIENCE", "ACTIVITY"
+  moderationStatus String            @default("APPROVED") // "APPROVED", "HELD_FOR_REVIEW", "REMOVED"
+  moderationReason String?
+  isDemo           Boolean           @default(false)
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+
+  comments         CommunityComment[]
+  reactions        PostReaction[]
+  reports          CommunityReport[]
+
+  @@index([groupId, moderationStatus, createdAt])
+  @@index([authorId])
+}
+
+model CommunityComment {
+  id               String            @id @default(cuid())
+  postId           String
+  post             CommunityPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId         String
+  author           User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  content          String
+  moderationStatus String            @default("APPROVED") // "APPROVED", "HELD_FOR_REVIEW", "REMOVED"
+  moderationReason String?
+  isDemo           Boolean           @default(false)
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+
+  reports          CommunityReport[]
+
+  @@index([postId, moderationStatus, createdAt])
+  @@index([authorId])
+}
+
+model PostReaction {
+  id        String        @id @default(cuid())
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      String        // "HELPFUL", "SUPPORTIVE", "CELEBRATE"
+  createdAt DateTime      @default(now())
+
+  @@unique([postId, userId, type])
+  @@index([postId, type])
+}
+
+model CommunityReport {
+  id              String            @id @default(cuid())
+  reporterId      String
+  reporter        User              @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  contentType     String            // "POST", "COMMENT"
+  contentId       String
+  postId          String?
+  post            CommunityPost?    @relation(fields: [postId], references: [id], onDelete: SetNull)
+  commentId       String?
+  comment         CommunityComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+
+  category        String            // "DANGEROUS_MEDICAL_ADVICE", "HARASSMENT", "MISINFORMATION", "SPAM", "PRIVACY_VIOLATION", "OTHER"
+  description     String?
+  status          String            @default("PENDING") // "PENDING", "REVIEWED", "DISMISSED", "RESOLVED"
+  resolutionNotes String?
+  resolvedById    String?
+
+  createdAt       DateTime          @default(now())
+  resolvedAt      DateTime?
+
+  @@index([status, createdAt])
+  @@index([contentType, contentId])
+}
+
+model ModerationAction {
+  id          String    @id @default(cuid())
+  moderatorId String
+  moderator   User      @relation("ModeratorActions", fields: [moderatorId], references: [id], onDelete: Cascade)
+
+  targetType  String    // "POST", "COMMENT", "USER"
+  targetId    String
+  actionType  String    // "APPROVE", "HOLD", "REMOVE", "WARN_USER", "RESTRICT_USER", "DISMISS_REPORT"
+  reason      String
+  reportId    String?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([targetType, targetId])
+  @@index([moderatorId])
+}
+
+model CommunityNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      String   // "NEW_COMMENT", "NEW_REACTION", "POST_APPROVED", "POST_HELD", "GROUP_INVITE", "MODERATOR_NOTE"
+  title     String
+  body      String
+  linkUrl   String?
+  isRead    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead, createdAt])
+}
+
+model CommunityPreference {
+  id                      String    @id @default(cuid())
+  userId                  String    @unique
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  preferredLang           String    @default("hi")
+  topicsOfInterest        String    @default("[]") // JSON string array
+  experienceLevel         String    @default("NEW_MEMBER") // "NEW_MEMBER", "EXPERIENCED"
+  preferredGroupSize      String    @default("SMALL_8_15") // "SMALL_8_15", "ANY"
+  communicationStyle      String    @default("SUPPORTIVE") // "SUPPORTIVE", "PRACTICAL", "QUIET_OBSERVER"
+  lifestyleAccountability Boolean   @default(true)
+  notificationsEnabled    Boolean   @default(true)
+  quietHoursStart         String?   @default("22:00")
+  quietHoursEnd           String?   @default("07:00")
+
+  updatedAt               DateTime  @updatedAt
+  createdAt               DateTime  @default(now())
+}
+
+model CommunityAuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action    String   // "POST_CREATED", "POST_EDITED", "POST_DELETED", "REPORT_FILED", "MODERATION_ACTION", "DATA_DELETION_REQUESTED", "GROUP_JOINED", "GROUP_LEFT"
+  details   String?  // JSON string
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([action, createdAt])
+}
+
+// ============================================================================
+// PULSE PROACTIVE CARE: INTERVENTION ENGINE & RECOVERY TRACKING
+// ============================================================================
+
+model RoutineOccurrence {
+  id                  String             @id @default(cuid())
+  userId              String
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId              String
+  goal                HealthGoal         @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  scheduledAt         DateTime
+  dueTimeOfDay        String?            // "13:30", "08:00"
+  status              String             @default("PENDING") // PENDING, COMPLETED, MISSED, SKIPPED, CANCELLED
+  completedAt         DateTime?
+  eligibilityStatus   String             @default("ELIGIBLE") // ELIGIBLE, PAUSED, CANCELLED, NOT_DUE
+  difficultyFeedback  String?            // "TOO_DIFFICULT", "OKAY", "EASY"
+  notes               String?
+
+  interventionEvents  InterventionEvent[]
+  recoveryOutcomes    RecoveryOutcome[]
+
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([userId, scheduledAt, status])
+  @@index([goalId, status])
+}
+
+model InterventionRule {
+  id                  String             @id @default(cuid())
+  name                String
+  triggerType         String             // MISSED_SINGLE_ROUTINE, REPEATED_MISSED_ROUTINES, GOAL_REPEATEDLY_TOO_DIFFICULT, PATIENT_REQUESTED_HELP, CLINICAL_CONCERN_REPORTED
+  conditionJson       String             // Configuration threshold and grace period
+  actionType          String             // GENTLE_REMINDER, ASK_BARRIER, SUGGEST_SMALLER_STEP, OFFER_RESCHEDULE, SHARE_EDUCATION, CONTACT_CARE_TEAM, SAFETY_ESCALATION
+  priority            Int                @default(1)
+  isActive            Boolean            @default(true)
+  
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model InterventionEvent {
+  id                    String                @id @default(cuid())
+  userId                String
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId                String?
+  goal                  HealthGoal?           @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  routineOccurrenceId   String?
+  routineOccurrence     RoutineOccurrence?    @relation(fields: [routineOccurrenceId], references: [id], onDelete: SetNull)
+  safetyEscalationId    String?
+  safetyEscalation      SafetyEscalation?     @relation(fields: [safetyEscalationId], references: [id], onDelete: SetNull)
+
+  triggerType           String                // MISSED_SINGLE_ROUTINE, REPEATED_MISSED_ROUTINES, GOAL_REPEATEDLY_TOO_DIFFICULT, PATIENT_REQUESTED_HELP, ROUTINE_RESUMED, RECOVERY_SUPPORT_NEEDED, CLINICAL_CONCERN_REPORTED
+  triggerReason         String                // Human-readable trigger explanation
+  interventionType      String                // GENTLE_REMINDER, ASK_BARRIER, SUGGEST_SMALLER_STEP, OFFER_RESCHEDULE, SHARE_EDUCATION, CONTACT_CARE_TEAM, SUPPRESS, SAFETY_ESCALATION
+  lifecycleStatus       String                @default("DETECTED") // DETECTED, ELIGIBILITY_CHECKED, PENDING, DELIVERED, PATIENT_RESPONDED, SUPPORT_OFFERED, SUPPORT_ACCEPTED, SUPPORT_DECLINED, RECOVERY_TRACKING, RESOLVED, SUPPRESSED, EXPIRED, CANCELLED, ESCALATED_FOR_REVIEW
+  
+  deduplicationKey      String                @unique // Ensures idempotent processing per trigger/routine/window
+  title                 String
+  titleHi               String?
+  message               String
+  messageHi             String?
+  optionsJson           String?               // JSON array of available user actions
+  explainableReason     String                // Transparent explainable reason stored in system
+  aiPersonalized        Boolean               @default(false)
+
+  deliveries            InterventionDelivery[]
+  response              InterventionResponse?
+  recoveryOutcome       RecoveryOutcome?
+
+  expiresAt             DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@index([userId, lifecycleStatus, createdAt])
+  @@index([goalId, lifecycleStatus])
+}
+
+model InterventionDelivery {
+  id                  String             @id @default(cuid())
+  interventionId      String
+  intervention        InterventionEvent  @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  channel             String             @default("IN_APP") // IN_APP, EMAIL, PUSH
+  status              String             @default("PENDING") // PENDING, DELIVERED, FAILED, SUPPRESSED
+  attemptCount        Int                @default(1)
+  attemptedAt         DateTime           @default(now())
+  deliveredAt         DateTime?
+  failureReason       String?
+
+  createdAt           DateTime           @default(now())
+
+  @@index([interventionId, status])
+}
+
+model InterventionResponse {
+  id                  String             @id @default(cuid())
+  interventionId      String             @unique
+  intervention        InterventionEvent  @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  responseType        String             // EXPLAINED_BARRIER, ACCEPTED_SUGGESTION, DECLINED_SUGGESTION, DISMISSED, REQUESTED_HELP, SAFETY_REPORTED
+  selectedBarrier     String?            // BUSY_SCHEDULE, FORGOT, LOW_MOTIVATION, TOO_DIFFICULT, COST_OR_ACCESS, DID_NOT_UNDERSTAND, FELT_UNWELL, PAIN_OR_MOBILITY, RESPONSIBILITIES, SOMETHING_ELSE, PREFER_NOT_TO_SAY
+  freeText            String?
+  acceptedOptionId    String?
+
+  createdAt           DateTime           @default(now())
+}
+
+model RecoveryOutcome {
+  id                        String              @id @default(cuid())
+  interventionId            String              @unique
+  intervention              InterventionEvent   @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  revisedGoalId             String?
+  nextEligibleOccurrenceId  String?
+  nextEligibleOccurrence    RoutineOccurrence?  @relation(fields: [nextEligibleOccurrenceId], references: [id], onDelete: SetNull)
+
+  outcomeStatus             String              @default("PENDING") // PENDING, RECOVERED, UNRESOLVED, EXPIRED
+  recoveredAt               DateTime?
+  notes                     String?
+
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  @@index([outcomeStatus, recoveredAt])
+}
+
+model ProactiveNotificationPreference {
+  id                        String    @id @default(cuid())
+  userId                    String    @unique
+  user                      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  enabled                   Boolean   @default(true)
+  preferredLanguage         String    @default("hi")     // "hi", "en"
+  preferredChannel          String    @default("IN_APP") // IN_APP, EMAIL, PUSH
+  quietHoursStart           String?   @default("22:00")  // HH:MM in patient timezone
+  quietHoursEnd             String?   @default("07:00")  // HH:MM
+  timezone                  String    @default("Asia/Kolkata")
+  
+  maxDailyInterventions     Int       @default(2)        // Configurable cap
+  cooldownHours             Int       @default(4)        // Minimum hours between proactive messages
+  allowFollowUpPrompts      Boolean   @default(true)
+  allowCaregiverAssistance  Boolean   @default(false)
+  categoriesAllowed         String    @default("[\"REMINDER\",\"BARRIER_CHECK\",\"RECOVERY\",\"EDUCATION\"]") // JSON array
+
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+}
+
+model InterventionAuditLog {
+  id                  String    @id @default(cuid())
+  userId              String?
+  user                User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  interventionId      String?
+  
+  action              String    // TRIGGER_DETECTED, INTERVENTION_CREATED, DELIVERED, SUPPRESSED_QUIET_HOURS, SUPPRESSED_COOLDOWN, SUPPRESSED_MAX_CAP, PATIENT_RESPONDED, SUGGESTION_ACCEPTED, ROUTINE_RECOVERED, ESCALATED_SAFETY
+  details             String?   // JSON string
+  createdAt           DateTime  @default(now())
+
+  @@index([userId, action, createdAt])
+}
+
+// ==========================================
+// PULSE SUPPORT: DOCTOR APPOINTMENTS & VIDEO
+// ==========================================
+
+model SpecialistProfile {
+  id                    String               @id @default(cuid())
+  userId                String?              @unique
+  name                  String               @default("")
+  title                 String               @default("") // e.g. "Dr. Rajesh Verma, MD"
+  role                  String               @default("Specialist") // "Endocrinologist", "Senior Diabetologist", "Dietitian & Nutritionist", "Diabetes Educator", "General Physician"
+  qualifications        String               @default("") // e.g. "MD, DM (Endocrinology), FACP"
+  registrationNumber    String?              // e.g. "MCI-84729-DEL"
+  hospitalClinic        String               @default("Pulse Diabetes & Metabolic Care Center")
+  specialty             String               @default("Endocrinology")
+  languages             String               @default("[\"English\", \"Hindi\"]") // JSON array string
+  bio                   String               @default("")
+  consultationTypes     String               @default("[\"VIDEO_CONSULTATION\", \"FOLLOW_UP\"]") // JSON array string
+  defaultDurationMinutes Int                 @default(30)
+  isVerified            Boolean              @default(true)
+  isActive              Boolean              @default(true)
+  avatarUrl             String?
+  rating                Float                @default(4.9)
+  reviewsCount          Int                  @default(128)
+  nextAvailableSlot     String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  appointments          DoctorAppointment[]
+  availabilities        DoctorAvailability[]
+}
+
+model DoctorAvailability {
+  id                    String               @id @default(cuid())
+  specialistId          String
+  specialist            SpecialistProfile    @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  dayOfWeek             Int                  // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime             String               // "09:00"
+  endTime               String               // "17:00"
+  slotDurationMinutes   Int                  @default(30)
+  bufferMinutes         Int                  @default(10)
+  isAvailable           Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([specialistId, dayOfWeek])
+}
+
+model DoctorAppointment {
+  id                    String               @id @default(cuid())
+  patientId             String
+  patient               User                 @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  specialistId          String
+  specialist            SpecialistProfile    @relation(fields: [specialistId], references: [id], onDelete: Cascade)
+  appointmentType       String               @default("VIDEO_CONSULTATION") // VIDEO_CONSULTATION, IN_PERSON, FOLLOW_UP
+  reason                String
+  optionalPatientNote   String?
+  scheduledAt           DateTime
+  durationMinutes       Int                  @default(30)
+  timezone              String               @default("Asia/Kolkata")
+  status                String               @default("CONFIRMED") // PENDING, CONFIRMED, RESCHEDULED, CANCELLED_BY_PATIENT, CANCELLED_BY_PROFESSIONAL, IN_PROGRESS, COMPLETED, NO_SHOW
+  meetingRoomId         String
+  meetingUrl            String
+  googleMeetUrl         String?
+  clinicalNotes         String?
+  cancellationReason    String?
+  cancelledAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  auditLogs             AppointmentAuditLog[]
+
+  @@index([patientId, scheduledAt])
+  @@index([specialistId, scheduledAt])
+  @@index([status])
+}
+
+model AppointmentAuditLog {
+  id                    String               @id @default(cuid())
+  appointmentId         String
+  appointment           DoctorAppointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  actorId               String               @default("SYSTEM")
+  action                String               // BOOKED, RESCHEDULED, CANCELLED, STATUS_CHANGED, MEETING_JOINED, NOTES_UPDATED
+  details               String?
+  createdAt             DateTime             @default(now())
+
+  @@index([appointmentId, createdAt])
+}
+
+// ==============================================================================
+// PULSE SUBSCRIPTION & MEMBERSHIP MODELS
+// ==============================================================================
+
+model SubscriptionPlan {
+  id                    String               @id @default(cuid())
+  name                  String               @default("Pulse Premium")
+  price                 Float                @default(499.0) // 499 INR
+  currency              String               @default("INR")
+  billingInterval       String               @default("monthly") // monthly
+  providerPlanId        String?              // e.g. plan_P123456789
+  active                Boolean              @default(true)
+  features              String?              // JSON array string of features
+  description           String?              @default("Access the Project Pulse health-support experience through personalized health goals, daily tracking, food education, peer encouragement, proactive habit support, and healthcare consultation features that are available and enabled on your account.")
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  subscriptions         UserSubscription[]
+}
+
+model UserSubscription {
+  id                    String               @id @default(cuid())
+  userId                String
+  user                  User                 @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+  planId                String
+  plan                  SubscriptionPlan     @relation(fields: [planId], references: [id])
+  provider              String               @default("razorpay") // razorpay
+  providerCustomerId    String?
+  providerSubscriptionId String?             @unique // sub_xxx
+  status                String               @default("NOT_SUBSCRIBED") // NOT_SUBSCRIBED, PENDING, ACTIVE, PAST_DUE, CANCELLED, EXPIRED, PAYMENT_FAILED
+  startsAt              DateTime?
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean              @default(false)
+  cancelledAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  transactions          PaymentTransaction[]
+
+  @@index([userId, status])
+  @@index([providerSubscriptionId])
+}
+
+model PaymentTransaction {
+  id                    String               @id @default(cuid())
+  userId                String
+  user                  User                 @relation("UserTransactions", fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId        String?
+  subscription          UserSubscription?    @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  provider              String               @default("razorpay")
+  providerPaymentId     String?              @unique // pay_xxx
+  providerOrderId       String?              // order_xxx
+  providerSignature     String?
+  amount                Float                @default(499.0) // In INR
+  currency              String               @default("INR")
+  status                String               @default("SUCCESS") // PENDING, SUCCESS, FAILED, REFUNDED
+  receiptNumber         String?              // e.g. RCPT-2026-XXXX
+  invoiceUrl            String?
+  billingPeriodStart    DateTime?
+  billingPeriodEnd      DateTime?
+  paymentMethod         String?              @default("UPI / Card")
+  errorMessage          String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([subscriptionId])
+  @@index([providerPaymentId])
+}
+
+model PaymentWebhookEvent {
+  id                    String               @id @default(cuid())
+  provider              String               @default("razorpay")
+  providerEventId       String               @unique // evt_xxx
+  eventType             String               // e.g. subscription.activated, payment.captured, subscription.cancelled
+  payload               String               // JSON string
+  processedAt           DateTime             @default(now())
+  processingStatus      String               @default("PROCESSED") // PROCESSED, FAILED, IGNORED
+  errorMessage          String?
+  createdAt             DateTime             @default(now())
+
+  @@index([provider, providerEventId])
+  @@index([eventType])
+}
+
+
+
