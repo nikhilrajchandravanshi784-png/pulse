@@ -37,10 +37,6 @@ export default function CommunityPage() {
   const lang = useCurrentLanguage();
   const t = getDictionary(lang);
 
-  useEffect(() => {
-    router.replace("/community/groups/building-healthy-habits");
-  }, [router]);
-
   const [activeTab, setActiveTab] = useState<TabType>("feed");
   const [groups, setGroups] = useState<GroupDTO[]>([]);
   const [posts, setPosts] = useState<PostDTO[]>([]);

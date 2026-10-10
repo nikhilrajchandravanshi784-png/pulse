@@ -172,16 +172,22 @@ export default function SupportPage() {
     fetchSpecialists();
   }, []);
 
-  // Fetch appointments for selected date
-  const fetchAppointmentsForDate = async (date: Date) => {
+  const [viewMode, setViewMode] = useState<"DATE" | "ALL">("ALL");
+
+  // Fetch appointments for selected date or all upcoming
+  const fetchAppointments = async (targetDate?: Date, modeOverride?: "DATE" | "ALL") => {
+    const activeMode = modeOverride || viewMode;
     setLoadingAppointments(true);
     try {
-      const yyyy = date.getFullYear();
-      const mm = String(date.getMonth() + 1).padStart(2, "0");
-      const dd = String(date.getDate()).padStart(2, "0");
-      const dateStr = `${yyyy}-${mm}-${dd}`;
+      let url = "/api/support/appointments";
+      if (activeMode === "DATE" && targetDate) {
+        const yyyy = targetDate.getFullYear();
+        const mm = String(targetDate.getMonth() + 1).padStart(2, "0");
+        const dd = String(targetDate.getDate()).padStart(2, "0");
+        url += `?date=${yyyy}-${mm}-${dd}`;
+      }
 
-      const res = await fetch(`/api/support/appointments?date=${dateStr}`);
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
         setAppointments(data.appointments || []);
@@ -194,8 +200,8 @@ export default function SupportPage() {
   };
 
   useEffect(() => {
-    fetchAppointmentsForDate(selectedDate);
-  }, [selectedDate]);
+    fetchAppointments(selectedDate, viewMode);
+  }, [selectedDate, viewMode]);
 
   // Fetch available slots when specialist or booking date changes
   useEffect(() => {
@@ -329,8 +335,12 @@ export default function SupportPage() {
         setScheduleStep(1);
         setConsultReason("");
         setPatientNotes("");
-        // Reload appointments
-        fetchAppointmentsForDate(selectedDate);
+        // Reload appointments and update view
+        const [yStr, mStr, dStr] = bookingDateStr.split("-");
+        const bookedDate = new Date(Number(yStr), Number(mStr) - 1, Number(dStr));
+        setSelectedDate(bookedDate);
+        setViewMode("ALL");
+        fetchAppointments(bookedDate, "ALL");
       } else {
         showToast(data.error || "Failed to schedule consultation.");
       }
@@ -355,7 +365,7 @@ export default function SupportPage() {
         showToast("Consultation cancelled.");
         setCancelModalOpen(false);
         setActionAppointment(null);
-        fetchAppointmentsForDate(selectedDate);
+        fetchAppointments(selectedDate, viewMode);
       } else {
         showToast(data.error || "Failed to cancel.");
       }
@@ -585,7 +595,7 @@ export default function SupportPage() {
             </button>
 
             <button
-              onClick={() => fetchAppointmentsForDate(selectedDate)}
+              onClick={() => fetchAppointments(selectedDate, viewMode)}
               className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition"
               title="Refresh schedule"
             >
@@ -593,33 +603,76 @@ export default function SupportPage() {
             </button>
           </div>
 
-          {/* Secondary Controls Bar: Today pill, < > navigation, options */}
+          {/* Secondary Controls Bar: Today pill, view mode toggle, < > navigation */}
           <div className="px-5 py-2.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
             <div className="flex items-center gap-2">
               <button
-                onClick={handleToday}
-                className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-xs flex items-center gap-1.5 transition"
+                onClick={() => {
+                  setViewMode("DATE");
+                  handleToday();
+                }}
+                className={`px-3 py-1 border rounded-lg text-xs font-medium shadow-xs flex items-center gap-1.5 transition ${
+                  viewMode === "DATE"
+                    ? "bg-white border-[#087F8C] text-[#087F8C] font-semibold"
+                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
               >
-                <CalendarIcon className="w-3.5 h-3.5 text-slate-500" />
+                <CalendarIcon className="w-3.5 h-3.5 text-[#087F8C]" />
                 <span>Today</span>
               </button>
 
               <div className="flex items-center gap-1">
                 <button
-                  onClick={handlePrevDay}
+                  onClick={() => {
+                    setViewMode("DATE");
+                    handlePrevDay();
+                  }}
                   className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition"
                   title="Previous Day"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={handleNextDay}
+                  onClick={() => {
+                    setViewMode("DATE");
+                    handleNextDay();
+                  }}
                   className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition"
                   title="Next Day"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+
+            {/* View Mode Toggle Pills */}
+            <div className="flex items-center gap-1 bg-slate-200/60 p-0.5 rounded-lg text-[11px]">
+              <button
+                onClick={() => {
+                  setViewMode("ALL");
+                  fetchAppointments(selectedDate, "ALL");
+                }}
+                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                  viewMode === "ALL"
+                    ? "bg-white text-[#101A45] shadow-2xs font-semibold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                All Upcoming
+              </button>
+              <button
+                onClick={() => {
+                  setViewMode("DATE");
+                  fetchAppointments(selectedDate, "DATE");
+                }}
+                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                  viewMode === "DATE"
+                    ? "bg-white text-[#101A45] shadow-2xs font-semibold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Selected Day
+              </button>
             </div>
 
             <button

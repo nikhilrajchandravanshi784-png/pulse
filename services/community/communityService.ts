@@ -414,6 +414,8 @@ export async function listCommunityGroups(userId?: string, category?: string, la
  * Get detailed group by slug or ID with recent posts.
  */
 export async function getGroupDetails(groupIdOrSlug: string, userId?: string): Promise<GroupDTO | null> {
+  await ensureDefaultGroupsAndDemo();
+
   const group = await prisma.communityGroup.findFirst({
     where: {
       OR: [{ id: groupIdOrSlug }, { slug: groupIdOrSlug }],
