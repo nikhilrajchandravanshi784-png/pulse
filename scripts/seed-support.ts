@@ -99,8 +99,17 @@ async function main() {
   ];
 
   for (const s of specialistsData) {
-    const user = await prisma.user.findFirst({ where: { email: s.email } });
-    if (!user) continue;
+    let user = await prisma.user.findFirst({ where: { email: s.email } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: s.email,
+          name: s.name,
+          role: "CLINICIAN",
+          passwordHash: "$2a$10$DemoHashForClinicianUsers1234567890",
+        },
+      });
+    }
 
     const profile = await prisma.specialistProfile.upsert({
       where: { userId: user.id },
